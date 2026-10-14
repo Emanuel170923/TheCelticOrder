@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+.venv/
+env/
+*.spec
+
+# Arquivos de Build/Distribuição
+build/
+dist/
+
+# Arquivos de Sistema/Instaladores
+*.exe
+*.msi
+
+# Dados gerados pela ferramenta (logs, capturas, etc.)
+auth/
+.server/
+*.log
+*.cap
+bruteforce_wordlist.txt
+keylog_output.log
+
+# Sistema
+.DS_Store
+Thumbs.db

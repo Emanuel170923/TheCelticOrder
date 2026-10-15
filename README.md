@@ -6,7 +6,7 @@
 
 ## 🌟 Features
 
-The tool includes 10 specialized modules accessible via a main menu:
+The tool includes **11 specialized modules** accessible via a main menu:
 
 1.  **🌐 Site Analyzer:** DNS resolution, subdomain enumeration (crt.sh), TLS certificate validation, HTTP header security audit (CSP, HSTS, Cookies), and exposed file detection.
 2.  **🔠 Password Generator:** Cryptographically secure password generation using the `secrets` module.
@@ -17,7 +17,8 @@ The tool includes 10 specialized modules accessible via a main menu:
 7.  **📡 Internet Options:** Wi-Fi auditing assistant (Monitor mode, Handshake analysis, Evil Twin configuration, WPS/WEP auditing).
 8.  **📝 Cybersecurity Manual:** An integrated educational guide covering the CIA triad, network protocols, Python for security, and defensive hardening.
 9.  **🔑 Brute Force Engine:** Production-grade parallel brute force for SSH, FTP, SMB, and Universal HTTP forms with smart fingerprinting and proxy support.
-10. **🕵️ OSINT Aggregator:** Multi-source data collection for IPs, Domains, Emails, and Documents (CPF/CNPJ validation), formatted for Telegram reporting.
+10. **🧪 Payload Forge:** Active testing and mutation generator for SQLi, XSS, Command Injection, Log4Shell, and SSRF. Includes WAF bypass mutations and live field testing.
+11. **🔬 Reverse Engineer:** Static analysis for binaries (PE/ELF/Mach-O), scripts, and data files. Features entropy analysis, critical string extraction, and packer detection.
 
 ## 📋 Requirements
 
@@ -37,4 +38,3 @@ The tool includes 10 specialized modules accessible via a main menu:
 ```bash
 git clone https://github.com/Emanuel170923/TheCeltic.git
 cd TheCelticOrder
-python3 TheCelticOrder.py

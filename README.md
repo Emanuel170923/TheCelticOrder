@@ -36,5 +36,6 @@ The tool includes **11 specialized modules** accessible via a main menu:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Emanuel170923/TheCeltic.git
+git clone https://github.com/Emanuel170923/TheCelticOrder.git
 cd TheCelticOrder
+python3 TheCelticOrder
